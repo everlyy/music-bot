@@ -1,0 +1,4 @@
+discord.py/
+.venv/
+config.py
+__pycache__/
