@@ -3,7 +3,6 @@ import lastfm
 import music_bot
 import commands
 
-
 if __name__ == "__main__":
     bot = music_bot.MusicBot(
         PLAYLISTS_PATH,
