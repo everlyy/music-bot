@@ -9,7 +9,6 @@ import pathlib
 import random
 import time
 import tinytag
-import typing
 import urllib.parse
 
 @dataclasses.dataclass
@@ -80,18 +79,18 @@ class MusicBot(discord.Client):
         print(f"Commands:")
         for item in self.tree.walk_commands():
             if isinstance(item, discord.app_commands.Group):
-                print(f"  {item.name}:")
+                print(f" {item.name}:")
                 for cmd in item.walk_commands():
                     assert isinstance(cmd, discord.app_commands.Command)
-                    print(f"    - {cmd.name}")
+                    print(f"  - {cmd.name}")
             else:
                 if item.parent is not None:
                     continue
-                print(f"  - {item.name}")
+                print(f" - {item.name}")
 
         print(f"Have {len(self.playlists)} playlist(s)")
         for playlist in self.playlists:
-            print(f"  - {playlist.name} ({len(playlist.tracks)} track(s))")
+            print(f" - {playlist.name} ({len(playlist.tracks)} track(s))")
 
         print(f"Bot ready")
 
@@ -180,107 +179,3 @@ class MusicBot(discord.Client):
             return
 
         self._skip = True
-
-lastfm_group = discord.app_commands.Group(name="lastfm", description="LastFM related commands")
-bot = MusicBot(
-    PLAYLISTS_PATH,
-    lastfm.LastFM(LASTFM_API_KEY, LASTFM_SECRET),
-    lastfm.LastFMSessionManager(LASTFM_SESSIONS_FILE)
-)
-bot.tree.add_command(lastfm_group)
-
-@bot.tree.command(name="reload", description=f"Reload all playlists")
-async def reload(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Reloading playlists...")
-    bot.reload_playlists()
-    await interaction.edit_original_response(content=f"Reloaded playlists")
-
-@bot.tree.command(name="playlists", description="List available playlists")
-async def playlists(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="Playlists",
-        description=f"Have {len(bot.playlists)} playlist(s)"
-    )
-
-    for playlist in bot.playlists:
-        embed.add_field(
-            name=playlist.name,
-            value=f"-# {playlist.path}\n{len(playlist.tracks)} track(s)",
-            inline=False
-        )
-
-    await interaction.response.send_message(embed=embed)
-
-async def autocomplete_playlist(_: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
-    playlist_names = [playlist.name for playlist in bot.playlists]
-    return [
-        discord.app_commands.Choice(name=playlist_name, value=playlist_name)
-        for playlist_name in playlist_names if current.lower() in playlist_name.lower()
-    ]
-
-@bot.tree.command(name="play", description="Play a playlist")
-@discord.app_commands.autocomplete(playlist_name=autocomplete_playlist)
-@discord.app_commands.rename(playlist_name="playlist")
-@discord.app_commands.guild_only()
-async def play(interaction: discord.Interaction, playlist_name: str):
-    assert interaction.guild is not None
-    assert isinstance(interaction.user, discord.Member)
-    assert isinstance(interaction.channel, discord.TextChannel)
-
-    if interaction.user.voice is None:
-        await interaction.response.send_message("You must be in a voice channel to begin playing music")
-        return
-
-    assert isinstance(interaction.user.voice.channel, discord.VoiceChannel)
-
-    playlist = bot.find_playlist_by_name(playlist_name)
-    if playlist is None:
-        await interaction.response.send_message(f"Couldn't find playlist with name `{playlist_name}`")
-        return
-
-    await typing.cast(MusicBot, interaction.client).play(playlist, interaction.user.voice.channel, interaction.channel)
-    await interaction.guild.change_voice_state(channel=interaction.user.voice.channel, self_deaf=True, self_mute=False)
-    await interaction.response.send_message("Hi")
-
-@bot.tree.command(name="stop", description="Stop")
-async def stop(interaction: discord.Interaction):
-    await typing.cast(MusicBot, interaction.client).stop()
-    await interaction.response.send_message("Bye")
-
-@bot.tree.command(name="skip", description="Skip to the next track")
-async def skip(interaction: discord.Interaction):
-    typing.cast(MusicBot, interaction.client).skip()
-    await interaction.response.send_message("Skipped")
-
-@lastfm_group.command(name="link", description="Link your last.fm account to the bot for scrobbling")
-async def lastfm_link(interaction: discord.Interaction):
-    await interaction.response.send_message("Generating URL, please wait", ephemeral=True)
-
-    token = await bot.lfm.auth_get_token()
-    auth_url = bot.lfm.get_auth_url(token)
-
-    await interaction.edit_original_response(content=f"Please open [this link](<{auth_url}>) in your browser to authenticate")
-
-    await asyncio.sleep(3)
-
-    session: (tuple[str, str] | None) = None
-
-    for _ in range(10):
-        try:
-            session = await bot.lfm.auth_get_session(token)
-        except:
-            await asyncio.sleep(1)
-
-    if session is None:
-        await interaction.edit_original_response(content=f"You didn't authenticate in time")
-        return
-
-    name, key = session
-    bot.lfmsm.add_session(str(interaction.user.id), key)
-    await interaction.edit_original_response(content=f"Successfully authenticated as {name}")
-
-@lastfm_group.command(name="unlink", description="Unlink your last.fm account from the bot")
-async def lastfm_unlink(interaction: discord.Interaction):
-    bot.lfmsm.remove_session(str(interaction.user.id))
-
-bot.run(DISCORD_TOKEN)
