@@ -17,6 +17,7 @@ class Metadata:
     artist: (str | None)
     album: (str | None)
     album_artist: (str | None)
+    duration: float
 
 @dataclasses.dataclass
 class Playlist:
@@ -36,40 +37,58 @@ class MusicBot(discord.Client):
         self._skip: bool = False
         self.playlists: list[Playlist] = []
         self._playlists_path = playlists_path
-        self._scrobble_queue: list[tuple[str, Metadata]] = []
+        self._scrobble_queue: list[tuple[str, bool, Metadata]] = []
 
     async def scrobbler(self):
         while True:
             while len(self._scrobble_queue) > 0:
-                user_id, metadata = self._scrobble_queue.pop()
-                session_key = self.lfmsm.get_session(user_id)
-                if session_key is None:
+                user_id, scrobble, metadata = self._scrobble_queue.pop(0)
+                session = self.lfmsm.get_session(user_id)
+                if session is None:
                     print(f"Couldn't find last.fm session key for {user_id}")
                     continue
 
+                name, session_key = session
+
                 if metadata.artist is None or metadata.title is None:
-                    print(f"Not scrobbling for {user_id} because there's not artist or title field")
+                    print(f"Not scrobbling for {user_id} ({name}) because there's not artist or title field")
                     continue
 
-                await self.lfm.track_scrobble(
-                    track=metadata.title,
-                    artist=metadata.artist,
-                    album=metadata.album,
-                    album_artist=(
-                        metadata.artist
-                        if metadata.album_artist is None else
-                        metadata.album_artist
-                    ),
-                    timestamp=int(time.time()),
-                    session_key=session_key
-                )
+                print(f"Scrobbling {metadata} for {name} ({scrobble=})")
+
+                if scrobble:
+                    await self.lfm.track_scrobble(
+                        track=metadata.title,
+                        artist=metadata.artist,
+                        album=metadata.album,
+                        album_artist=(
+                            metadata.artist
+                            if metadata.album_artist is None else
+                            metadata.album_artist
+                        ),
+                        timestamp=int(time.time()),
+                        session_key=session_key
+                    )
+                else:
+                    await self.lfm.track_update_now_playing(
+                        track=metadata.title,
+                        artist=metadata.artist,
+                        album=metadata.album,
+                        album_artist=(
+                            metadata.artist
+                            if metadata.album_artist is None else
+                            metadata.album_artist
+                        ),
+                        session_key=session_key
+                    )
+
             await asyncio.sleep(5)
 
     async def on_ready(self):
         print(f"Syncing command tree")
-        await self.tree.sync()
+        #await self.tree.sync()
 
-        print(f"Reloading playlist")
+        print(f"Reloading playlists")
         self.reload_playlists()
 
         print(f"Initializing last.fm scrobbler")
@@ -133,7 +152,8 @@ class MusicBot(discord.Client):
 
     def get_metadata(self, track: str) -> (Metadata | None):
         tag = tinytag.TinyTag.get(track)
-        metadata = Metadata(tag.title, tag.artist, tag.album, tag.albumartist)
+        assert tag.duration is not None # Not sure why there wouldn't be a duration
+        metadata = Metadata(tag.title, tag.artist, tag.album, tag.albumartist, tag.duration)
         return metadata
 
     async def dj(self, playlist: Playlist, channel: discord.VoiceChannel, updates: discord.TextChannel):
@@ -141,13 +161,16 @@ class MusicBot(discord.Client):
             track = random.choice(playlist.tracks)
             self._vc.play(discord.FFmpegOpusAudio(track, bitrate=256))
 
+            play_start = time.time()
+            scrobbled = False
+
             metadata = self.get_metadata(track)
 
             if metadata is not None:
                 await updates.send(f"Now playing {metadata.title} by {metadata.artist}")
                 for member in channel.members:
                     if member.id != self.application_id:
-                        self._scrobble_queue.append((str(member.id), metadata))
+                        self._scrobble_queue.append((str(member.id), False, metadata))
             else:
                 await updates.send(f"Now playing `{track}`\n-# This track will not scrobble because it does not have any metadata")
 
@@ -156,6 +179,14 @@ class MusicBot(discord.Client):
                     self._vc.stop()
                     self._skip = False
                     break
+
+                if metadata is not None and not scrobbled and (time.time() - play_start) > (metadata.duration * 0.5):
+                    for member in channel.members:
+                        if member.id != self.application_id:
+                            self._scrobble_queue.append((str(member.id), True, metadata))
+
+                    scrobbled = True
+
                 await asyncio.sleep(1)
 
     async def play(self, playlist: Playlist, channel: discord.VoiceChannel, updates: discord.TextChannel):

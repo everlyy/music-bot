@@ -29,10 +29,36 @@ async def lastfm_link(interaction: discord.Interaction):
         return
 
     name, key = session
-    bot(interaction).lfmsm.add_session(str(interaction.user.id), key)
+    bot(interaction).lfmsm.add_session(str(interaction.user.id), (name, key))
     await interaction.edit_original_response(content=f"Successfully authenticated as {name}")
 
 @GROUP.command(name="unlink", description="Unlink your last.fm account from the bot")
 async def lastfm_unlink(interaction: discord.Interaction):
     bot(interaction).lfmsm.remove_session(str(interaction.user.id))
     await interaction.response.send_message(f"Your last.fm account was disconnected")
+
+@GROUP.command(name="info", description="Show what last.fm account is linked")
+async def lastfm_info(interaction: discord.Interaction):
+    session = bot(interaction).lfmsm.get_session(str(interaction.user.id))
+
+    if session is None:
+        await interaction.response.send_message("You have not yet linked a last.fm account.")
+        return
+
+    name, _ = session
+    user_info = await bot(interaction).lfm.user_get_info(name)
+
+    embed = discord.Embed(title=f"{user_info.name}'s last.fm profile")
+
+    embed.set_thumbnail(url=user_info.image)
+    embed.url = user_info.url
+
+    embed.description = "\n".join([
+        f"**Plays**: {user_info.playcount:,}",
+        f"**Artists**: {user_info.artist_count:,}",
+        f"**Albums**: {user_info.album_count:,}",
+        f"**Tracks**: {user_info.track_count:,}",
+        f"**Member Since**: <t:{user_info.registered.strftime('%s')}:R>"
+    ])
+
+    await interaction.response.send_message(embed=embed)
