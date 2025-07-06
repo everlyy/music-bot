@@ -2,3 +2,4 @@ discord.py/
 .venv/
 config.py
 __pycache__/
+lastfm.json
