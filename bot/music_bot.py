@@ -1,15 +1,14 @@
-from bs4 import BeautifulSoup
 from config import *
+from playlists.common import Playlist
 import asyncio
 import dataclasses
 import discord
 import lastfm
 import os
-import pathlib
+import playlists
 import random
 import time
 import tinytag
-import urllib.parse
 
 @dataclasses.dataclass
 class Metadata:
@@ -18,12 +17,6 @@ class Metadata:
     album: (str | None)
     album_artist: (str | None)
     duration: float
-
-@dataclasses.dataclass
-class Playlist:
-    name: str
-    path: str
-    tracks: list[str]
 
 class MusicBot(discord.Client):
     def __init__(self, playlists_path: str, lfm: lastfm.LastFM, lfmsm: lastfm.LastFMSessionManager):
@@ -113,21 +106,6 @@ class MusicBot(discord.Client):
 
         print(f"Bot ready")
 
-    def _parse_xspf_playlist(self, playlist: str) -> Playlist:
-        name = pathlib.Path(playlist).stem
-        path = os.path.abspath(playlist)
-        tracks: list[str] = []
-
-        file = open(playlist, "rb")
-        data = file.read()
-        file.close()
-
-        bs = BeautifulSoup(data, "xml")
-        for tag in bs.find_all("location"):
-            tracks.append(urllib.parse.unquote(tag.text))
-
-        return Playlist(name, path, tracks)
-
     def find_playlist_by_name(self, playlist_name: str) -> (Playlist | None):
         for playlist in self.playlists:
             if playlist.name == playlist_name:
@@ -136,19 +114,9 @@ class MusicBot(discord.Client):
         return None
 
     def reload_playlists(self) -> None:
-        self.playlists.clear()
-
-        for entry in os.listdir(self._playlists_path):
-            path = os.path.join(self._playlists_path, entry)
-
-            if not os.path.isfile(path):
-                continue
-
-            if path.lower().endswith(".xspf"):
-                playlist = self._parse_xspf_playlist(path)
-                self.playlists.append(playlist)
-
-        return
+        self.playlists = playlists.parse_all_playlists(playlists.SearchPaths(
+            xspf_path=self._playlists_path
+        ))
 
     def get_metadata(self, track: str) -> (Metadata | None):
         tag = tinytag.TinyTag.get(track)

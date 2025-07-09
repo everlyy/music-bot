@@ -20,7 +20,7 @@ async def playlists_list(interaction: discord.Interaction):
     for playlist in bot(interaction).playlists:
         embed.add_field(
             name=playlist.name,
-            value=f"-# {playlist.path}\n{len(playlist.tracks)} track(s)",
+            value=f"-# {playlist.source}\n{len(playlist.tracks)} track(s)",
             inline=False
         )
 
