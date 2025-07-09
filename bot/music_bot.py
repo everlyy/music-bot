@@ -19,7 +19,7 @@ class Metadata:
     duration: float
 
 class MusicBot(discord.Client):
-    def __init__(self, playlists_path: str, lfm: lastfm.LastFM, lfmsm: lastfm.LastFMSessionManager):
+    def __init__(self, lfm: lastfm.LastFM, lfmsm: lastfm.LastFMSessionManager):
         super().__init__(intents=discord.Intents.default())
         self.tree = discord.app_commands.CommandTree(self)
         self.playing: bool = False
@@ -29,7 +29,6 @@ class MusicBot(discord.Client):
         self._vc: discord.VoiceClient
         self._skip: bool = False
         self.playlists: list[Playlist] = []
-        self._playlists_path = playlists_path
         self._scrobble_queue: list[tuple[str, bool, Metadata]] = []
 
     async def scrobbler(self):
@@ -115,7 +114,8 @@ class MusicBot(discord.Client):
 
     def reload_playlists(self) -> None:
         self.playlists = playlists.parse_all_playlists(playlists.SearchPaths(
-            xspf_path=self._playlists_path
+            xspf_path=PLAYLISTS_PATH,
+            collection_path=COLLECTION_PATH
         ))
 
     def get_metadata(self, track: str) -> (Metadata | None):

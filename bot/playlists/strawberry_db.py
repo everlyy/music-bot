@@ -1,13 +1,7 @@
-import os
 from .common import Playlist
 import sqlite3
 
-DB_PATH = os.path.expanduser("~/.local/share/strawberry/strawberry/strawberry.db")
-
-def parse(path: (str | None) = None) -> (list[Playlist] | None):
-    if path is None:
-        path = DB_PATH
-
+def parse(path: str) -> (list[Playlist] | None):
     c = sqlite3.connect(path)
 
     # Probably possible in a single query, I'm just not enough of a sql witch
