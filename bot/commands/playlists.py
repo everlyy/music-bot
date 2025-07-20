@@ -27,10 +27,9 @@ async def playlists_list(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 async def autocomplete_playlist(interaction: discord.Interaction, current: str) -> list[discord.app_commands.Choice[str]]:
-    playlist_names = [playlist.name for playlist in bot(interaction).playlists]
     return [
-        discord.app_commands.Choice(name=playlist_name, value=playlist_name)
-        for playlist_name in playlist_names if current.lower() in playlist_name.lower()
+        discord.app_commands.Choice(name=f"[{playlist.source}] {playlist.name}", value=playlist.name)
+        for playlist in bot(interaction).playlists if current.lower() in playlist.name.lower()
     ]
 
 @GROUP.command(name="play", description="Play a playlist")
