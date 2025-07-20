@@ -25,6 +25,7 @@ class MusicBot(discord.Client):
         self.playing: bool = False
         self.lfm = lfm
         self.lfmsm = lfmsm
+        self.track: (str | None) = None
 
         self._vc: discord.VoiceClient
         self._skip: bool = False
@@ -126,13 +127,13 @@ class MusicBot(discord.Client):
 
     async def dj(self, playlist: Playlist, channel: discord.VoiceChannel, updates: discord.TextChannel):
         while self.playing:
-            track = random.choice(playlist.tracks)
-            self._vc.play(discord.FFmpegOpusAudio(track, bitrate=256))
+            self.track = random.choice(playlist.tracks)
+            self._vc.play(discord.FFmpegOpusAudio(self.track, bitrate=256))
 
             play_start = time.time()
             scrobbled = False
 
-            metadata = self.get_metadata(track)
+            metadata = self.get_metadata(self.track)
 
             if metadata is not None:
                 await updates.send(f"Now playing {metadata.title} by {metadata.artist}")
@@ -140,7 +141,7 @@ class MusicBot(discord.Client):
                     if member.id != self.application_id:
                         self._scrobble_queue.append((str(member.id), False, metadata))
             else:
-                await updates.send(f"Now playing `{track}`\n-# This track will not scrobble because it does not have any metadata")
+                await updates.send(f"Now playing `{self.track}`\n-# This track will not scrobble because it does not have any metadata")
 
             while self._vc.is_playing():
                 if self._skip:
