@@ -1,4 +1,5 @@
 from .common import Playlist
+from urllib.parse import unquote, urlparse
 import sqlite3
 
 def parse(path: str) -> (list[Playlist] | None):
@@ -12,7 +13,8 @@ def parse(path: str) -> (list[Playlist] | None):
         query = "SELECT url FROM songs WHERE ROWID IN (SELECT collection_id FROM playlist_items WHERE playlist = ?)"
         args = (playlist_rowid, )
         for url, *_ in c.execute(query, args):
-            tracks.append(url)
+            path = unquote(urlparse(url).path)
+            tracks.append(path)
 
         playlists.append(Playlist(playlist_name, "strawberry.db", tracks))
 
